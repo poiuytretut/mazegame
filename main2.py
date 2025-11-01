@@ -1,4 +1,4 @@
-# main2.py - добавим функцию создания дампа
+# main2.py - добавим переключение интерфейса и новые управления
 import os
 import sys
 import math
@@ -19,6 +19,7 @@ class MazeGame:
         self.running = False
         self.game_won = False
         self.console_output = []  # Храним вывод консоли
+        self.show_interface = True  # Флаг отображения интерфейса
         
     def clear_console(self):
         """Очищает консоль"""
@@ -70,6 +71,7 @@ class MazeGame:
         """Инициализация игры"""
         self.clear_console()
         self.console_output = []  # Очищаем историю вывода
+        self.show_interface = True  # Сбрасываем флаг интерфейса
         print("Генерация лабиринта...")
         self.save_console_output("Генерация лабиринта...")
         
@@ -117,14 +119,14 @@ class MazeGame:
                     self.player.rotate_left()
                 elif key == 'd':
                     self.player.rotate_right()
+                elif key == 'z':  # СТРЕЙФ ВЛЕВО
+                    self.player.strafe_left(maze)
+                elif key == 'c':  # СТРЕЙФ ВПРАВО
+                    self.player.strafe_right(maze)
                 elif key == 'q':
                     self.running = False
                     print("Выход из игры...")
                     self.save_console_output("Выход из игры...")
-                elif key == 'e':
-                    self.player.strafe_right(maze)
-                elif key == 'z':
-                    self.player.strafe_left(maze)
                 elif key == 'r':  # Рестарт игры
                     print("Рестарт игры...")
                     self.save_console_output("Рестарт игры...")
@@ -133,6 +135,14 @@ class MazeGame:
                     print("Создание дампа игры...")
                     self.save_console_output("Создание дампа игры...")
                     self.create_dump_file()
+                elif key == 'i':  # Переключение интерфейса
+                    self.show_interface = not self.show_interface
+                    if self.show_interface:
+                        print("Интерфейс включен")
+                        self.save_console_output("Интерфейс включен")
+                    else:
+                        print("Интерфейс скрыт")
+                        self.save_console_output("Интерфейс скрыт")
                     
         except Exception as e:
             # Игнорируем ошибки декодирования (специальные клавиши)
@@ -140,9 +150,18 @@ class MazeGame:
     
     def render_ui(self):
         """Рендерит интерфейс пользователя"""
+        if not self.show_interface:
+            # Минималистичный интерфейс
+            ui = "\n" + "=" * CONSOLE_WIDTH + "\n"
+            ui += "Нажмите I для отображения интерфейса\n"
+            ui += "=" * CONSOLE_WIDTH + "\n"
+            return ui
+        
+        # Полный интерфейс
         ui = "\n" + "=" * CONSOLE_WIDTH + "\n"
-        ui += "ЛАБИРИНТ | Управление: W/S - вперед/назад, A/D - поворот, Q - выход\n"
-        ui += "E/Z - стрейф, R - рестарт, L - сохранить дамп игры\n"
+        ui += "ЛАБИРИНТ | Управление: W/S - вперед/назад, A/D - поворот\n"
+        ui += "Z/C - стрейф влево/вправо, Q - выход, I - интерфейс\n"
+        ui += "R - рестарт, L - сохранить дамп игры\n"
         ui += f"Позиция: ({self.player.x:.1f}, {self.player.y:.1f}) | "
         ui += f"Угол: {math.degrees(self.player.angle):.1f}°\n"
         
@@ -186,23 +205,25 @@ class MazeGame:
                 print(ui_text)
                 self.save_console_output(ui_text)
                 
-                # Мини-карта
-                minimap = self.raycaster.render_minimap(
-                    self.player, 
-                    self.maze_generator.get_maze()
-                )
-                print("Мини-карта:")
-                print(minimap)
-                self.save_console_output("Мини-карта:")
-                self.save_console_output(minimap)
+                # Мини-карта (показываем только при включенном интерфейсе)
+                if self.show_interface:
+                    minimap = self.raycaster.render_minimap(
+                        self.player, 
+                        self.maze_generator.get_maze()
+                    )
+                    print("Мини-карта:")
+                    print(minimap)
+                    self.save_console_output("Мини-карта:")
+                    self.save_console_output(minimap)
                 
-                # Отладочная информация
-                debug_info = f"Кадр: {frame_count}"
-                print(debug_info)
-                self.save_console_output(debug_info)
+                # Отладочная информация (только при включенном интерфейсе)
+                if self.show_interface:
+                    debug_info = f"Кадр: {frame_count}"
+                    print(debug_info)
+                    self.save_console_output(debug_info)
                 
                 # Задержка между кадрами 0.05 секунды
-                time.sleep(0.05)
+                time.sleep(0.01)
                 
         except KeyboardInterrupt:
             print("\nИгра прервана пользователем")

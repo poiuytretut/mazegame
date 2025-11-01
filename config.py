@@ -13,9 +13,9 @@ EXIT_SYMBOL = '0'
 WALL_SYMBOL = '#'
 
 # Настройки игрока
-PLAYER_HEIGHT = 0.5
-MOVE_SPEED = 0.1
-ROTATION_SPEED = 0.05
+PLAYER_HEIGHT = 0.25
+MOVE_SPEED = 0.2
+ROTATION_SPEED = 0.1
 
 # Настройки raycasting
 FOV = 3.14159 / 3  # 60 градусов
