@@ -1,3 +1,4 @@
+# raycasting.py - с соотношением символов 2:1
 import math
 from config import *
 
@@ -7,14 +8,14 @@ class RayCaster:
         self.console_height = console_height
         self.fov = FOV
         self.max_distance = MAX_RENDER_DISTANCE
-        self.num_rays = NUM_RAYS
+        self.num_rays = NUM_RAYS // 2  # Уменьшаем количество лучей для широких пикселей
         
         # Градиент символов от самого светлого к самому темному
         self.gradient_symbols = "@%#*+=-,. "
         self.gradient_length = len(self.gradient_symbols)
     
     def render_frame(self, player, maze):
-        """Рендерит один кадр с помощью raycasting"""
+        """Рендерит один кадр с помощью raycasting с соотношением 2:1"""
         frame = []
         ray_angle = player.angle - self.fov / 2
         
@@ -22,15 +23,18 @@ class RayCaster:
             # Бросаем луч
             distance, hit_type, hit_side = self._cast_ray(player.x, player.y, ray_angle, maze)
             
-            # Вычисляем высоту стены
+            # Вычисляем высоту стены с учетом соотношения 2:1
             wall_height = self._calculate_wall_height(distance)
             
             # Получаем символ для стены на основе расстояния
             wall_char = self._get_wall_symbol(distance, hit_side)
             
-            # Создаем колонку для этого луча
+            # Создаем колонку для этого луча (учитываем соотношение 2:1)
             column = self._create_column(wall_height, distance, wall_char, hit_side)
+            
+            # Добавляем две одинаковые колонки для создания широкого пикселя (2:1)
             frame.append(column)
+            frame.append(column)  # Дублируем колонку для ширины 2
             
             ray_angle += self.fov / self.num_rays
         
@@ -102,12 +106,13 @@ class RayCaster:
         return min(distance, self.max_distance), hit_type, side
     
     def _calculate_wall_height(self, distance):
-        """Вычисляет высоту стены на экране"""
+        """Вычисляет высоту стены на экране с учетом соотношения 2:1"""
         if distance == 0:
             return self.console_height
         
-        # Перспективная коррекция
-        wall_height = int(self.console_height / distance)
+        # Перспективная коррекция с учетом соотношения 2:1
+        # Умножаем на 2 для компенсации широких пикселей
+        wall_height = int(self.console_height / distance * 2)
         return min(wall_height, self.console_height)
     
     def _get_wall_symbol(self, distance, side):
@@ -130,8 +135,10 @@ class RayCaster:
         return self.gradient_symbols[gradient_index]
     
     def _create_column(self, wall_height, distance, wall_char, side):
-        """Создает одну колонку экрана"""
+        """Создает одну колонку экрана с учетом соотношения 2:1"""
         column = []
+        
+        # Корректируем высоты для соотношения 2:1
         ceiling_height = (self.console_height - wall_height) // 2
         floor_height = self.console_height - ceiling_height - wall_height
         
@@ -143,9 +150,8 @@ class RayCaster:
             ceiling_index = max(0, min(self.gradient_length - 1, ceiling_index))
             column.append(self.gradient_symbols[ceiling_index])
         
-        # Стены
+        # Стены - используем вычисленный символ
         for i in range(wall_height):
-            # Для стен используем вычисленный символ
             current_char = wall_char
             
             # Легкий вертикальный градиент для стен (светлее к центру)
@@ -187,11 +193,12 @@ class RayCaster:
         return "\n".join(output_lines)
     
     def render_minimap(self, player, maze, size=10):
-        """Рендерит мини-карту"""
+        """Рендерит мини-карту с учетом соотношения 2:1"""
         minimap = ""
         player_map_x = int(player.x)
         player_map_y = int(player.y)
         
+        # Корректируем размер мини-карты для соотношения 2:1
         for y in range(player_map_y - size, player_map_y + size):
             line = ""
             for x in range(player_map_x - size * 2, player_map_x + size * 2):
