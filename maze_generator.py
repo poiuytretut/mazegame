@@ -28,7 +28,14 @@ class MazeGenerator:
             
         print(f"Генерация лабиринта {self.width}x{self.height}...")
         
-        max_attempts = 50  # Увеличиваем до 50 попыток
+        # Увеличиваем количество попыток для сложных уровней
+        if self.width >= 400:  # Сложность 4 и 5
+            max_attempts = 150
+        elif self.width >= 200:  # Сложность 3
+            max_attempts = 100
+        else:
+            max_attempts = 50
+            
         for attempt in range(max_attempts):
             print(f"Попытка {attempt + 1}/{max_attempts}")
             
@@ -58,28 +65,41 @@ class MazeGenerator:
         # Инициализируем карту стенами
         self.maze = [[WALL_SYMBOL for _ in range(self.width)] for _ in range(self.height)]
         
-        # Оптимизация: для больших лабиринтов используем больший шаг
-        if self.width > 400:
-            step_size = 8  # Увеличиваем шаг для очень больших лабиринтов
+        # Определяем настройки в зависимости от сложности
+        if self.width >= 800:  # Сложность 5 - экстрим
+            step_size = 3  # Широкие коридоры 2-3 клетки
+            room_generation_interval = self.width // 25
+            corridor_width = random.randint(2, 3)  # Случайная ширина коридоров
+        elif self.width >= 400:  # Сложность 4 - хардкор
+            step_size = 2  # Широкие коридоры 2 клетки
             room_generation_interval = self.width // 20
-        elif self.width > 200:
-            step_size = 6
+            corridor_width = 2
+        elif self.width >= 200:  # Сложность 3 - сложная
+            step_size = 2  # Широкие коридоры 2 клетки
             room_generation_interval = self.width // 15
-        elif self.width > 100:
-            step_size = 4
+            corridor_width = 2
+        elif self.width >= 100:  # Сложность 2 - нормальная
+            step_size = 2
             room_generation_interval = self.width // 10
-        else:
+            corridor_width = 1
+        else:  # Сложность 1 - легкая
             step_size = 2
             room_generation_interval = self.width // 5
+            corridor_width = 1
         
         step_count = 0
-        max_steps = min(50000, self.width * self.height // 3)  # Увеличиваем максимальное количество шагов
+        max_steps = min(100000, self.width * self.height // 2)  # Увеличиваем максимальное количество шагов
         
         # Используем алгоритм поиска в глубину для генерации лабиринта
         stack = []
         start_x, start_y = 1, 1
         
-        self.maze[start_y][start_x] = EMPTY_SYMBOL
+        # Создаем стартовую область с учетом ширины коридоров
+        for y in range(start_y, start_y + corridor_width):
+            for x in range(start_x, start_x + corridor_width):
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    self.maze[y][x] = EMPTY_SYMBOL
+        
         stack.append((start_x, start_y))
         
         while stack and step_count < max_steps:
@@ -90,7 +110,7 @@ class MazeGenerator:
             
             # Проверяем, не пора ли генерировать комнату (реже для больших лабиринтов)
             if step_count % room_generation_interval == 0:
-                if random.random() < 0.3:  # Увеличиваем шанс генерации комнаты
+                if random.random() < 0.4:  # Увеличиваем шанс генерации комнаты
                     self._try_generate_random_room()
             
             # Получаем возможные направления
@@ -103,23 +123,43 @@ class MazeGenerator:
                     
                     # Упрощенная проверка для больших лабиринтов
                     empty_count = 0
-                    for check_dx, check_dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
-                        cx, cy = nx + check_dx, ny + check_dy
-                        if (0 <= cx < self.width and 0 <= cy < self.height and
-                            self.maze[cy][cx] == EMPTY_SYMBOL):
-                            empty_count += 1
+                    check_range = 2 if corridor_width > 1 else 1
+                    for check_dx in range(-check_range, check_range + 1):
+                        for check_dy in range(-check_range, check_range + 1):
+                            cx, cy = nx + check_dx, ny + check_dy
+                            if (0 <= cx < self.width and 0 <= cy < self.height and
+                                self.maze[cy][cx] == EMPTY_SYMBOL):
+                                empty_count += 1
                     
-                    # Увеличиваем допустимое количество пустых клеток вокруг
-                    if empty_count <= 3:
+                    # Увеличиваем допустимое количество пустых клеток вокруг для широких коридоров
+                    max_empty = 6 if corridor_width > 1 else 3
+                    if empty_count <= max_empty:
                         directions.append((dx, dy, nx, ny))
             
             if directions:
                 dx, dy, next_x, next_y = random.choice(directions)
-                # Убираем стену между текущей и следующей клеткой
-                wall_x = current_x + dx//2
-                wall_y = current_y + dy//2
-                self.maze[wall_y][wall_x] = EMPTY_SYMBOL
-                self.maze[next_y][next_x] = EMPTY_SYMBOL
+                
+                # Создаем коридор с учетом ширины
+                if corridor_width > 1:
+                    # Для широких коридоров создаем несколько клеток
+                    for wy in range(corridor_width):
+                        for wx in range(corridor_width):
+                            wall_x = current_x + dx//2 + wx
+                            wall_y = current_y + dy//2 + wy
+                            next_cell_x = next_x + wx
+                            next_cell_y = next_y + wy
+                            
+                            if (0 <= wall_x < self.width and 0 <= wall_y < self.height):
+                                self.maze[wall_y][wall_x] = EMPTY_SYMBOL
+                            if (0 <= next_cell_x < self.width and 0 <= next_cell_y < self.height):
+                                self.maze[next_cell_y][next_cell_x] = EMPTY_SYMBOL
+                else:
+                    # Обычные коридоры (1 клетка шириной)
+                    wall_x = current_x + dx//2
+                    wall_y = current_y + dy//2
+                    self.maze[wall_y][wall_x] = EMPTY_SYMBOL
+                    self.maze[next_y][next_x] = EMPTY_SYMBOL
+                    
                 stack.append((next_x, next_y))
             else:
                 stack.pop()
@@ -132,8 +172,10 @@ class MazeGenerator:
     
     def _connect_isolated_areas(self):
         """Соединяет изолированные области лабиринта"""
-        if self.width > 400:
-            connection_attempts = self.width * self.height // 1000
+        if self.width >= 400:
+            connection_attempts = self.width * self.height // 800
+        elif self.width >= 200:
+            connection_attempts = self.width * self.height // 600
         else:
             connection_attempts = self.width * self.height // 500
             
@@ -157,7 +199,7 @@ class MazeGenerator:
     def _try_generate_random_room(self):
         """Пытается сгенерировать случайную комнату с оптимизацией"""
         attempts = 0
-        max_attempts = 10  # Увеличиваем количество попыток
+        max_attempts = 15  # Увеличиваем количество попыток
         
         while attempts < max_attempts:
             attempts += 1
@@ -176,16 +218,16 @@ class MazeGenerator:
     def _generate_rooms_during_maze(self):
         """Дополнительная генерация комнат после создания базового лабиринта"""
         # Увеличиваем количество комнат для больших лабиринтов
-        if self.width > 400:
-            additional_rooms = max(5, self.width * self.height // 3000)
-        elif self.width > 200:
-            additional_rooms = max(8, self.width * self.height // 2000)
+        if self.width >= 400:
+            additional_rooms = max(10, self.width * self.height // 2000)
+        elif self.width >= 200:
+            additional_rooms = max(12, self.width * self.height // 1500)
         else:
             additional_rooms = max(10, self.width * self.height // 1000)
             
         rooms_created = 0
         attempts = 0
-        max_attempts = additional_rooms * 10  # Увеличиваем максимальное количество попыток
+        max_attempts = additional_rooms * 15  # Увеличиваем максимальное количество попыток
         
         while rooms_created < additional_rooms and attempts < max_attempts:
             attempts += 1
@@ -206,9 +248,13 @@ class MazeGenerator:
             return False
         
         # Проверяем, что вся область комнаты состоит из стен
-        for room_y in range(y, y + size):
-            for room_x in range(x, x + size):
-                if self.maze[room_y][room_x] != WALL_SYMBOL:
+        # Делаем проверку менее строгой для больших лабиринтов
+        check_step = 2 if self.width >= 400 else 1
+        
+        for room_y in range(y, y + size, check_step):
+            for room_x in range(x, x + size, check_step):
+                if (0 <= room_x < self.width and 0 <= room_y < self.height and
+                    self.maze[room_y][room_x] != WALL_SYMBOL):
                     return False
         
         return True
@@ -222,8 +268,8 @@ class MazeGenerator:
                     self.maze[room_y][room_x] = EMPTY_SYMBOL
         
         # Меньше стен в комнатах для больших лабиринтов
-        if self.width <= 200:
-            num_walls = random.randint(0, 1)  # Уменьшаем количество стен
+        if self.width >= 200:
+            num_walls = random.randint(0, max(0, size // 4))  # Уменьшаем количество стен
         else:
             num_walls = random.randint(0, 1)
             
@@ -241,8 +287,8 @@ class MazeGenerator:
                 walls_placed += 1
         
         # Создаем проходы из комнаты (увеличиваем количество проходов)
-        if self.width > 200:
-            num_exits = random.randint(2, 4)  # Больше проходов
+        if self.width >= 200:
+            num_exits = random.randint(2, min(5, size - 1))  # Больше проходов для больших комнат
         else:
             num_exits = random.randint(2, 4)
             
@@ -253,7 +299,7 @@ class MazeGenerator:
         random.shuffle(sides)
         
         for side in sides:
-            if exits_created >= num_exits or exit_attempts >= 15:
+            if exits_created >= num_exits or exit_attempts >= 20:
                 break
                 
             exit_attempts += 1
@@ -284,10 +330,10 @@ class MazeGenerator:
 
     def _add_random_paths(self):
         """Добавляет случайные проходы для улучшения связности"""
-        if self.width > 400:
-            extra_paths = self.width * self.height // 100  # Увеличиваем количество проходов
-        elif self.width > 200:
-            extra_paths = self.width * self.height // 80
+        if self.width >= 400:
+            extra_paths = self.width * self.height // 80  # Увеличиваем количество проходов
+        elif self.width >= 200:
+            extra_paths = self.width * self.height // 60
         else:
             extra_paths = self.width * self.height // 50
             
@@ -310,7 +356,7 @@ class MazeGenerator:
     # Остальные методы остаются без значительных изменений, но с оптимизацией
     def _place_player_start(self):
         """Размещает стартовую позицию игрока в центре комнаты"""
-        if self.width > 400:
+        if self.width >= 400:
             start_search_x = self.width // 10
             start_search_y = self.height // 10
         else:
@@ -350,7 +396,7 @@ class MazeGenerator:
         max_distance = 0
         exit_pos = start_pos
         
-        search_step = 3 if self.width > 400 else 2 if self.width > 200 else 1
+        search_step = 3 if self.width >= 400 else 2 if self.width >= 200 else 1
         
         for y in range(3, self.height - 3, search_step):
             for x in range(3, self.width - 3, search_step):
@@ -370,14 +416,14 @@ class MazeGenerator:
             return False
         
         # Для очень больших лабиринтов используем упрощенную проверку
-        if self.width > 400:
+        if self.width >= 400:
             return self._quick_solvability_check(start_pos, exit_pos)
         
         visited = [[False for _ in range(self.width)] for _ in range(self.height)]
         stack = [start_pos]
         visited[start_pos[1]][start_pos[0]] = True
         
-        max_steps = min(200000, self.width * self.height // 2)  # Увеличиваем максимальное количество шагов
+        max_steps = min(300000, self.width * self.height // 2)  # Увеличиваем максимальное количество шагов
         
         steps = 0
         while stack and steps < max_steps:
@@ -403,7 +449,7 @@ class MazeGenerator:
         stack = [start_pos]
         visited.add(start_pos)
         
-        max_steps = 100000  # Увеличиваем максимальное количество шагов
+        max_steps = 150000  # Увеличиваем максимальное количество шагов
         
         steps = 0
         while stack and steps < max_steps:
