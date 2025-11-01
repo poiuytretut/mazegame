@@ -1,4 +1,4 @@
-# raycasting.py - с соотношением символов 2:1
+# raycasting.py - с соотношением символов 2:1 и особым отображением выхода
 import math
 from config import *
 
@@ -21,16 +21,16 @@ class RayCaster:
         
         for col in range(self.num_rays):
             # Бросаем луч
-            distance, hit_type, hit_side = self._cast_ray(player.x, player.y, ray_angle, maze)
+            distance, hit_type, hit_side, hit_exit = self._cast_ray(player.x, player.y, ray_angle, maze)
             
             # Вычисляем высоту стены с учетом соотношения 2:1
             wall_height = self._calculate_wall_height(distance)
             
             # Получаем символ для стены на основе расстояния
-            wall_char = self._get_wall_symbol(distance, hit_side)
+            wall_char = self._get_wall_symbol(distance, hit_side, hit_exit)
             
             # Создаем колонку для этого луча (учитываем соотношение 2:1)
-            column = self._create_column(wall_height, distance, wall_char, hit_side)
+            column = self._create_column(wall_height, distance, wall_char, hit_side, hit_exit)
             
             # Добавляем две одинаковые колонки для создания широкого пикселя (2:1)
             frame.append(column)
@@ -41,7 +41,7 @@ class RayCaster:
         return self._format_frame(frame)
     
     def _cast_ray(self, start_x, start_y, angle, maze):
-        """Бросает луч и возвращает расстояние до стены и тип попадания"""
+        """Бросает луч и возвращает расстояние до стены/выхода и тип попадания"""
         # Нормализуем угол
         angle %= 2 * math.pi
         
@@ -75,6 +75,7 @@ class RayCaster:
         hit = False
         side = 0  # 0 - вертикальная стена, 1 - горизонтальная
         distance = 0
+        hit_exit = False
         
         while not hit and distance < self.max_distance:
             if side_dist_x < side_dist_y:
@@ -101,9 +102,20 @@ class RayCaster:
                 
                 # Абсолютное значение
                 distance = abs(distance)
+            elif maze[map_y][map_x] == EXIT_SYMBOL:
+                hit = True
+                hit_exit = True
+                # Вычисляем расстояние
+                if side == 0:
+                    distance = (map_x - start_x + (1 - step_x) / 2) / ray_dir_x
+                else:
+                    distance = (map_y - start_y + (1 - step_y) / 2) / ray_dir_y
+                
+                # Абсолютное значение
+                distance = abs(distance)
         
-        hit_type = 'wall'
-        return min(distance, self.max_distance), hit_type, side
+        hit_type = 'exit' if hit_exit else 'wall'
+        return min(distance, self.max_distance), hit_type, side, hit_exit
     
     def _calculate_wall_height(self, distance):
         """Вычисляет высоту стены на экране с учетом соотношения 2:1"""
@@ -115,8 +127,17 @@ class RayCaster:
         wall_height = int(self.console_height / distance * 2)
         return min(wall_height, self.console_height)
     
-    def _get_wall_symbol(self, distance, side):
-        """Возвращает символ для стены на основе расстояния"""
+    def _get_wall_symbol(self, distance, side, is_exit=False):
+        """Возвращает символ для стены/выхода на основе расстояния"""
+        if is_exit:
+            # Особое отображение выхода - всегда яркий символ независимо от расстояния
+            # Меняем символ в зависимости от расстояния для эффекта мерцания/пульсации
+            pulse_factor = (math.sin(distance * 3) + 1) / 2  # Пульсация от 0 до 1
+            if pulse_factor > 0.7:
+                return '0'  # Яркий символ выхода
+            else:
+                return 'O'  # Немного менее яркий
+        
         if distance >= self.max_distance:
             return ' '  # Слишком далеко - пробел (самый темный)
     
@@ -134,7 +155,7 @@ class RayCaster:
     
         return self.gradient_symbols[gradient_index]
     
-    def _create_column(self, wall_height, distance, wall_char, side):
+    def _create_column(self, wall_height, distance, wall_char, side, is_exit=False):
         """Создает одну колонку экрана с учетом соотношения 2:1"""
         column = []
         
@@ -142,35 +163,61 @@ class RayCaster:
         ceiling_height = (self.console_height - wall_height) // 2
         floor_height = self.console_height - ceiling_height - wall_height
         
-        # Потолок - темный (используем темные символы из конца градиента)
-        for i in range(ceiling_height):
-            # Градиент для потолка (темнее к верху)
-            ceiling_intensity = 1.0 - (i / ceiling_height) if ceiling_height > 0 else 0
-            ceiling_index = int(ceiling_intensity * (self.gradient_length - 1))
-            ceiling_index = max(0, min(self.gradient_length - 1, ceiling_index))
-            column.append(self.gradient_symbols[ceiling_index])
-        
-        # Стены - используем вычисленный символ
-        for i in range(wall_height):
-            current_char = wall_char
+        # Для выхода создаем особое отображение
+        if is_exit:
+            # Выход всегда отображается ярко, независимо от расстояния
+            # Создаем градиент для выхода (яркий в центре, темнее к краям)
+            for i in range(ceiling_height):
+                column.append(' ')
             
-            # Легкий вертикальный градиент для стен (светлее к центру)
-            if wall_height > 1:
-                vertical_factor = abs(i / wall_height - 0.5) * 2  # 0 в центре, 1 по краям
-                current_index = self.gradient_symbols.find(current_char)
-                # Сделаем центр стены немного светлее
-                if vertical_factor < 0.5 and current_index > 0:
-                    current_char = self.gradient_symbols[current_index - 1]
+            for i in range(wall_height):
+                # Для выхода создаем вертикальный градиент
+                if wall_height <= 1:
+                    current_char = wall_char
+                else:
+                    # Центр выхода ярче, края темнее
+                    pos = i / wall_height
+                    if pos < 0.3 or pos > 0.7:
+                        # Края - темнее
+                        current_char = 'O' if wall_char == '0' else '0'
+                    else:
+                        # Центр - ярче
+                        current_char = wall_char
+                column.append(current_char)
             
-            column.append(current_char)
-        
-        # Пол - светлый (используем светлые символы из начала градиента)
-        for i in range(floor_height):
-            # Градиент для пола (светлее к низу)
-            floor_intensity = (i / floor_height) if floor_height > 0 else 0
-            floor_index = int(floor_intensity * (self.gradient_length - 1) * 0.5)
-            floor_index = max(0, min(self.gradient_length - 1, floor_index))
-            column.append(self.gradient_symbols[floor_index])
+            for i in range(floor_height):
+                column.append(' ')
+        else:
+            # Обычная стена
+            # Потолок - темный (используем темные символы из конца градиента)
+            for i in range(ceiling_height):
+                # Градиент для потолка (темнее к верху)
+                ceiling_intensity = 1.0 - (i / ceiling_height) if ceiling_height > 0 else 0
+                ceiling_index = int(ceiling_intensity * (self.gradient_length - 1))
+                ceiling_index = max(0, min(self.gradient_length - 1, ceiling_index))
+                column.append(self.gradient_symbols[ceiling_index])
+            
+            # Стены - используем вычисленный символ
+            for i in range(wall_height):
+                current_char = wall_char
+                
+                # Легкий вертикальный градиент для стен (светлее к центру)
+                if wall_height > 1:
+                    vertical_factor = abs(i / wall_height - 0.5) * 2  # 0 в центре, 1 по краям
+                    current_index = self.gradient_symbols.find(current_char)
+                    # Сделаем центр стены немного светлее
+                    if vertical_factor < 0.5 and current_index > 0:
+                        current_char = self.gradient_symbols[current_index - 1]
+                
+                column.append(current_char)
+            
+            # Пол - светлый (используем светлые символы из начала градиента)
+            for i in range(floor_height):
+                # Градиент для пола (светлее к низу)
+                floor_intensity = (i / floor_height) if floor_height > 0 else 0
+                floor_index = int(floor_intensity * (self.gradient_length - 1) * 0.5)
+                floor_index = max(0, min(self.gradient_length - 1, floor_index))
+                column.append(self.gradient_symbols[floor_index])
         
         return column
     
@@ -217,7 +264,7 @@ class RayCaster:
                     elif maze[y][x] == WALL_SYMBOL:
                         line += "#"
                     elif maze[y][x] == EXIT_SYMBOL:
-                        line += "E"
+                        line += "E"  # Яркое отображение выхода на мини-карте
                     elif maze[y][x] == PLAYER_START_SYMBOL:
                         line += "S"
                     else:

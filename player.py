@@ -9,6 +9,11 @@ class Player:
         self.height = PLAYER_HEIGHT
         self.move_speed = MOVE_SPEED
         self.rotation_speed = ROTATION_SPEED
+        self.target_x = x  # Целевая позиция для демо-режима
+        self.target_y = y
+        self.target_angle = 0  # Целевой угол для демо-режима
+        self.is_moving = False  # Флаг движения для демо-режима
+        self.is_rotating = False  # Флаг поворота для демо-режима
         
     def move_forward(self, maze):
         """Движение вперед с проверкой столкновений"""
@@ -49,10 +54,75 @@ class Player:
     def rotate_left(self):
         """Поворот камеры влево"""
         self.angle -= self.rotation_speed
+        self._normalize_angle()
     
     def rotate_right(self):
         """Поворот камеры вправо"""
         self.angle += self.rotation_speed
+        self._normalize_angle()
+    
+    def _normalize_angle(self):
+        """Нормализует угол в диапазон [0, 2π]"""
+        self.angle %= 2 * math.pi
+        if self.angle < 0:
+            self.angle += 2 * math.pi
+    
+    def get_angle_degrees(self):
+        """Возвращает угол в градусах [0, 360)"""
+        degrees = math.degrees(self.angle) % 360
+        if degrees < 0:
+            degrees += 360
+        return degrees
+    
+    # Методы для демо-режима
+    def set_target_position(self, target_x, target_y):
+        """Устанавливает целевую позицию для движения в демо-режиме"""
+        self.target_x = target_x
+        self.target_y = target_y
+        self.is_moving = True
+    
+    def set_target_angle(self, target_angle):
+        """Устанавливает целевой угол для поворота в демо-режиме"""
+        self.target_angle = target_angle
+        self.is_rotating = True
+    
+    def update_demo_movement(self):
+        """Обновляет движение и поворот для демо-режима"""
+        # Поворот к целевому углу
+        if self.is_rotating:
+            angle_diff = self.target_angle - self.angle
+            # Нормализуем разницу углов
+            if angle_diff > math.pi:
+                angle_diff -= 2 * math.pi
+            elif angle_diff < -math.pi:
+                angle_diff += 2 * math.pi
+            
+            if abs(angle_diff) < self.rotation_speed:
+                self.angle = self.target_angle
+                self.is_rotating = False
+            else:
+                if angle_diff > 0:
+                    self.angle += self.rotation_speed
+                else:
+                    self.angle -= self.rotation_speed
+                self._normalize_angle()
+        
+        # Движение к целевой позиции
+        if self.is_moving:
+            dx = self.target_x - self.x
+            dy = self.target_y - self.y
+            distance = math.sqrt(dx*dx + dy*dy)
+            
+            if distance < self.move_speed:
+                self.x = self.target_x
+                self.y = self.target_y
+                self.is_moving = False
+            else:
+                # Двигаемся в направлении цели
+                move_x = dx / distance * self.move_speed
+                move_y = dy / distance * self.move_speed
+                self.x += move_x
+                self.y += move_y
     
     def _check_collision(self, x, y, maze):
         """Проверка столкновения со стенами"""
